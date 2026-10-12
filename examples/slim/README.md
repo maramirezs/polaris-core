@@ -8,7 +8,7 @@ TOTP in an organization.
 cd examples/slim
 composer install
 bin/setup                       # .env, RS256 keys, SQLite schema, permission catalog
-php -S 127.0.0.1:8080 -t public # in another terminal
+php -S 127.0.0.1:8080 -t public public/index.php # in another terminal (index.php routes the /.well-known paths)
 bin/walkthrough.sh              # the steps below, executed
 ```
 
@@ -79,5 +79,15 @@ authenticator. `POLARIS_BASE_URL` (`http://localhost:8080` by default; a domain,
 to it) is the origin the callbacks derive from; `src/FileCache.php` keeps the plugins' short-lived state
 across `php -S` requests. `bin/setup` creates the tables of a fresh database only: delete `var/polaris.sqlite`
 to rebuild it after adding a plugin.
+
+The demo is also an OAuth 2.1 provider, an MCP server and an agent provider: `polaris/oauth-provider`
+(`public/consent.html` and `device.html` are its reference pages; tokens for `<base>/mcp` are accepted),
+`polaris/mcp` (`POST /mcp`, a tool per route the token may call) and `polaris/agents` with one low-risk
+capability, `demo.echo`, approved by policy for an owner who holds `members.read`; `public/approve.html`
+is the reference approval page for a `device_authorization` approval (`?user_code=...`). The walkthrough's
+steps 17 to 27 run only here: an OAuth client of the organization exchanges the session for an MCP token
+and lists the tools, then `bin/agent-walkthrough.php` (the PHP agent SDK, `polaris/agent`) enrols an
+agent through a host, gets the grant, executes `demo.echo` twice and verifies the receipt chain against
+the JWKS; `npm run e2e` in `packages/agent-ts` runs the same walkthrough with `@polaris-auth/agent`.
 
 Polaris for PHP is created and maintained by [2am.tech](https://2am.tech).

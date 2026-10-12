@@ -416,3 +416,229 @@ entries here when a WP confirms or changes them.
   for it; the effect-based rule needs no annotation and the permissioned routes stay delegable);
   refusing delegated tokens on every permissionless route (`/auth/me`, the reads, are what a key is for);
   a DPoP server nonce (as before).
+- 2026-10-10 · WP4 · Spec §9.5: `mcp/sdk` (the official `modelcontextprotocol/php-sdk`, ^0.8, which speaks
+  the 2026-07-28 stateless profile and the 2025 handshake from one builder) is a hard `require` of
+  `polaris/mcp`, not a `suggest` of its server half. The protect half (`McpProtectedResource`) uses none of
+  it, but it sits in front of a PHP MCP server, which is in practice built on the same SDK; a suggested
+  dependency would mean `class_exists` branches in the server half and a second CI matrix for one package.
+  The SDK's transports stay behind `Polaris\Mcp\Transport\{Stdio,Http}`; Polaris passes its PSR-17
+  factories explicitly, so the SDK's `php-http/discovery` Composer plugin is never needed and the root
+  `allow-plugins` lists it as `false`. · Rejected: `suggest` plus a runtime check; a separate
+  `polaris/mcp-server` package (one more split, Packagist entry and README for one class).
+- 2026-10-10 · WP4 · Spec §9.6: a Polaris protocol document with a compatibility subset, not exact
+  compatibility. Better Auth's Agent Auth Protocol (agentauthprotocol.com, `1.0-draft`) is a moving
+  draft whose host model (host JWTs keyed by a thumbprint, Ed25519 only, `/agent/*` lifecycle routes,
+  async and streamed execution) would be a second identity system beside core's OAuth provider.
+  `docs/better/agent-auth-compat.md` becomes the normative Polaris document: what Polaris serves, the
+  JSON Schema the discovery document validates against, and the subset an AAP agent can rely on without
+  a mode switch (Polaris only adds fields): the discovery fields `version`, `provider_name`,
+  `description`, `issuer`, `default_location`, `algorithms`, `modes`, `approval_methods`, `endpoints`;
+  the capability object (`name`, `description`, `input`, `location`); the agent JWT (`typ: agent+jwt`,
+  `sub` = the agent, `aud`, `iat`, `exp`, `jti`, `capabilities`, sent as `Authorization: Bearer`);
+  execute `{capability, arguments}` answering `{data}`; the error codes `invalid_jwt`,
+  `capability_not_granted`, `constraint_violated` (with `violations`), `capability_not_found` as the
+  `error` of Polaris problem documents. Not served: host JWT registration, key rotation routes,
+  reactivation, async and streamed execution. · Rejected: exact compatibility (a second agent identity
+  model to keep in step with a draft); a compatibility switch (nothing to switch: the shapes are additive).
+- 2026-10-10 · WP4 · The agent SDKs (spec §4.7): generated from the manifest are the route table of the
+  `agents` and `oauth` routes the SDKs call (method, path, input fields), checked in as
+  `packages/agent-ts/src/routes.ts` and `packages/agent/src/Routes.php` and drift-checked in CI, and, for
+  TypeScript, the request and response types, imported from `@polaris-auth/client`'s generated
+  `schema.d.ts`. Hand-written are only the loops and the cryptography: signing request JWTs and
+  `private_key_jwt` assertions (WebCrypto in TypeScript, `firebase/php-jwt` in PHP: no new runtime
+  dependency), polling an approval (`interval`, `slow_down`, expiry), the token exchange and client
+  credentials calls, and receipt verification (the hash chain and the core-key signature against
+  `/auth/.well-known/jwks.json`). Keys are ES256 (P-256) or EdDSA (Ed25519). · Rejected: SDKs wrapping
+  the whole client (an agent needs a dozen calls, not the 200 routes); a JOSE library dependency
+  (WebCrypto and the JWT library core's packages already use cover it).
+- 2026-10-10 · WP4 · An agent is an OAuth client of `polaris/oauth-provider` (§4.3 items 1 and 2 reuse
+  0.9.0 as they are): registering or enrolling an agent creates the client through `Clients::create`
+  and the agent's id is the client's `client_id`, so a client-credentials token's `sub` is the agent.
+  An autonomous agent's client may use `client_credentials`, a delegated agent's the token exchange;
+  `auth: private_key_jwt` stores the agent's public JWK as the client's `jwks`, `client_secret` mints a
+  `pcs_` secret shown once, `delegated_token` is a public client limited to the exchange (the user's
+  subject token is the credential). The client's `scopes` follow the agent's active grants (the
+  permissions their capabilities require), so a token can only be minted within what was granted.
+  `polaris/oauth-provider` changes twice, both additive: the exchange's `act` names the requesting
+  client by `sub` as RFC 8693 §4.1 has it (`{sub, client_id}`, was `{client_id}`; one recorded WP3
+  fixture's shape gains the masked `sub`), and `OAuthPlugin(audiences: [...])` lists further audiences
+  that name this server (`<baseUrl>/mcp`, the resource MCP clients ask for), accepted by its resolver as
+  the issuer is. · Rejected: an agent token endpoint in the agents plugin (a second authorization
+  server); recognising agents by a client id prefix (the id is a UUID like every other).
+- 2026-10-10 · WP4 · The agent principal: the agents plugin's middleware (after token authentication,
+  before step-up and authorization) recognises a token whose `client_id` is an agent's and replaces it
+  in-process: the agent must be active (else `401 agents/agent_inactive`); `delegated` becomes the
+  token's delegated permissions intersected with the agent's live grants (decision #3, so a grant
+  revoked takes effect at the next request, not at the token's expiry); the metadata gains
+  `actor_type: agent`, `agent_id` and `act: {sub: <agent>, type: agent}`. A delegated agent's token
+  keeps the user as `sub`; an autonomous agent's acts as its owner (a user's agent as the user, an
+  organization's as the member who registered it, in that organization), as an organization's API key
+  does (WP3), so core's RBAC, the delegation rule and every endpoint see the owner and the agent. Agent
+  events are `Auditable` with `actor_type = agent`, the agent as actor and the user as subject.
+- 2026-10-10 · WP4 · The agent-facing routes (`POST /agents/execute`, `/agents/grants/request`,
+  `GET /agents/session`, `POST /agents/enroll`) are `auth: public` and authenticate the agent themselves,
+  as `/oauth2/userinfo` does: core's delegation rule refuses a delegated token on a permissionless write
+  route, and these routes are the agent's. Two credentials: the agent's OAuth access token (verified by
+  the oauth plugin's resolver), or a signed request JWT (§4.3 item 3): header `typ: agent+jwt`, `alg`
+  ES256 or EdDSA, signed by the agent's registered JWK (no `jku`, no `jwk` header), `sub` = the agent,
+  `aud` = the exact URL called (scheme, host, path; no query), `iat`, `exp` with `exp - iat` ≤ 300
+  seconds, `jti` once (the cache, keyed by agent and `jti`, until `exp`), optional `htm`, `htu` and
+  `body_hash` (base64url SHA-256 of the raw body) checked when present, optional `capabilities`. The
+  owner-facing routes (register, hosts, list, approvals, decide, suspend, resume, revoke, receipts,
+  grant delete) are `auth: bearer` self-service writes, so no delegated credential (a key, an OAuth
+  token, an agent) can approve a grant or register an agent; an organization's agents need `org.update`
+  in that organization, checked by the endpoint (not `requires_permissions`, which would make the route
+  delegable).
+- 2026-10-10 · WP4 · Grants and budgets: a grant request names capabilities and asked constraints; the
+  approval's method (`device_authorization`, `ciba`, `in_app`) only changes how the owner finds it (a
+  user code looked up at `GET /agents/approvals/{code}`, an `agent.grant.requested` event the host turns
+  into a push, the list `GET /agents/approvals`); all decide at `POST /agents/approvals/{id}/decide`,
+  which checks the strength the capability's risk requires (`session`, `step_up`: core's step-up
+  freshness, `passkey`: a recent `passkey` sign-in) and that the owner holds the capability's
+  permission. `autoApprove` (default: `low` risk, budget 100 executions) approves without a person when
+  the owner holds the permission. Constraints are AAP's operators per argument (`max`, `min`, `in`,
+  `not_in`) plus `pattern`, and `budget: {count|amount, window?}`: a counter decremented by a
+  conditional update in the execution's transaction; the window, when set, is the grant's lifetime; an
+  exhausted grant answers `agents/budget_exhausted` and a refill is a new request.
+- 2026-10-10 · WP4 · Receipts: one per execution in the execution's transaction, a chain per agent
+  (`seq` unique per agent, `prev_hash`, `hash` = SHA-256 over the canonical JSON of the receipt's fields
+  and `prev_hash`), signed by core's key as a compact JWS over the hash (`typ: receipt+jwt`, verifiable
+  with `/auth/.well-known/jwks.json`); `GET /agents/receipts/{id}/verify` recomputes the hash, checks the
+  signature and the link to the previous receipt. Revoking an agent writes a final `sealed` receipt and
+  nothing is chained after it. Inputs are stored as a hash, never in clear.
+- 2026-10-10 · WP4 · Capabilities with a `location` (a host route): `AgentRequestMiddleware` is a PSR-15
+  middleware the host puts in front of its routes (`AgentsPlugin::of($graph)->requestMiddleware()`); a
+  request whose URL is a capability's location is refused unless an agent authenticates for that URL and
+  holds a grant whose constraints the arguments (the JSON body) satisfy; the budget, the host handler and
+  the receipt (outcome from the response status) run in one transaction, and the handler reads the
+  evaluated grant from the request attribute `polaris.agents.grant`. Capabilities without a location
+  run the configured `handler` at `POST /agents/execute`. `GET /.well-known/agent-configuration` is a
+  route under the mount, as the OAuth documents are; the root alias is the host's.
+- 2026-10-10 · WP4 · `polaris/mcp` as an MCP server: one tool per manifest route the principal may call,
+  named `polaris.` plus its spec file's path under `api/` with `/` and `-` read as `.`
+  (`orgs/members-list.yaml` is `polaris.orgs.members.list`); the input schema is the route's OpenAPI
+  operation folded into one object (path, query and body fields, from the input rules), the output
+  schema the typed example; annotations from `effect`. Listed per principal: public routes (not
+  `mfa_token` ones), bearer routes whose permissions the principal's authority holds and the delegation
+  rule allows, admin routes for an operator principal; plugins add tools through
+  `Polaris\Mcp\ToolProvider` (the agents plugin: every capability, an execution with its receipt). A
+  call is dispatched through `Polaris\Psr15\Pipeline` as an in-process request, so it answers exactly
+  what the route answers (`structuredContent: {status, body}`, `isError` from 4xx/5xx); the principal
+  travels as a request attribute that the mcp plugin's bearer resolver returns, never as a header, so a
+  DPoP-bound token proven once at `/mcp` serves every inner call and nothing on the wire can set it.
+  `POST /mcp` is a public route whose endpoint applies `McpProtectedResource` (core's keys, `aud` = the
+  `/mcp` URL or the issuer) and then resolves the principal through the bearer resolvers;
+  `bin/polaris mcp` (stdio) takes its credential from `POLARIS_MCP_TOKEN` and adds the read-only CLI
+  commands (`schema:export`, `schema:diff`, `manifest`, `doctor`) as tools. Resources:
+  `polaris://manifest` (the OpenAPI document), `polaris://schema` (the schema export),
+  `polaris://problems/<plugin>/<name>`. `legacy: reject` by default (spec §3.7: the 2026-07-28 profile);
+  `allow` serves the 2025 handshake with sessions in the PSR-16 cache. The protected resource keeps its
+  own small DPoP proof check (`polaris/mcp` does not require `polaris/oauth-provider`). · Rejected:
+  re-sending the bearer on inner calls (a DPoP proof is bound to `/mcp`'s URL); a tool per HTTP method
+  and path (the spec names tools by route).
+- 2026-10-10 · WP4 · `polaris/mcp` as built: the SDK's builder is assembled per principal (per HTTP
+  request; once per stdio process) with explicit tools and handlers, so the SDK lists them, validates
+  the arguments against the input schema and runs them (no custom `tools/list`/`tools/call` handlers).
+  Over HTTP, `/mcp` accepts only JWTs whose `aud` is `<baseUrl>/mcp` or the issuer (OAuth access
+  tokens); a session token or an API key is `invalid_token` there and is a stdio credential
+  (`--token`, `POLARIS_MCP_TOKEN`). The SDK's stdio transport speaks the 2025 handshake (every stdio
+  client sends `initialize`); HTTP serves 2026-07-28 by default and the handshake with `legacy: allow`
+  (sessions in the PSR-16 cache under `polaris.mcp.session.`). The SDK's own HTTP middleware (CORS, DNS
+  rebinding: localhost only) is off: the host owns those. Admin-tagged routes are listed for an operator
+  (admin's `Principals`, when the admin plugin is registered) and only for them the inner request carries
+  the credential as `Authorization: Bearer`, because the admin middleware authenticates from the header
+  and its principals are never DPoP-bound; every other inner call carries the attribute only. CLI tools
+  run through a fresh `Polaris\Cli\Application` (no bootstrap, so no recursion), answering
+  `{status: 200|500, body: <output>}`. `polaris://problems/{plugin}/{name}` answers what the manifest
+  declares for that code. The protected-resource metadata of Polaris's own `/mcp` advertises the required
+  scopes and the permission catalog. The functional fixture freezes the whole `tools/list` of core,
+  audit, admin and oauth, so a changed summary or field there re-records it (the contract freeze working).
+- 2026-10-10 · WP4 · `polaris/agents` as built: 23 routes (the owner's `auth: bearer` routes, the agent's
+  public self-authenticated ones, `/admin/agents` list and revoke for operators). The device page's data
+  is `GET /agents/approvals/code?user_code=` rather than `/agents/approvals/{code}`: the fixtures mask
+  only UUIDs in paths (oauth's device verify takes `?user_code=` for the same reason). `/agents/enroll`
+  uses the `token_refresh` group (a host enrols many agents; `register` is five an hour per IP, shared
+  with `/auth/register`), `/agents/register` `register`, decide `mfa_confirm`. OAuth reads an empty
+  client scope list as "any scope", so an agent without a live grant keeps the harmless `profile` scope
+  and can mint only a token for its own routes. The stored JWK carries `alg` and `kid` (the agent's, or
+  its RFC 7638 thumbprint), which the SDKs sign with. Receipt signatures have no `exp` (a receipt stays
+  verifiable) and are checked through the oauth plugin's `Jwt::verify`, so a key rotation keeps them
+  valid; `verify` compares the signature and the successor's link against the recomputed hash, so a
+  receipt edited in the database fails its own check and the next one's. Capabilities asked at
+  registration or enrolment go through the same policy; what is not auto-approved waits as an `in_app`
+  approval. An absent constrained argument is a violation; budgets are integers (amounts round up); a
+  grant is `exhausted` when its remainder reaches zero, a call it cannot cover answers
+  `budget_exhausted` without changing it. A handler that throws rolls the execution back and leaves no
+  receipt. The kill switch emits one `agent.revoked` (with the number of grants ended) and
+  `agent.receipt.sealed`; a member who leaves takes the organization's agents they registered with them
+  (revoked and sealed, by `system`); an erased user or organization erases its agents, their clients and
+  tokens, grants, approvals, receipts and hosts. MCP: a tool per capability with a handler (location
+  capabilities run at the host), `destructive` for `risk: high`. Problem types beyond the protocol
+  document's table: `agents/unauthorized`, `invalid_arguments` (422), `invalid_input`, `not_found`,
+  `forbidden`, `conflict`, `step_up_required`, `permission_not_held`, `sealed`. `polaris/oauth-provider`
+  gains `Tokens::revokeForClient()`; disabling the client and syncing its scopes use `Clients::update`.
+- 2026-10-10 · WP4 · The agent SDKs as built (refining the SDK entry above): `@polaris-auth/agent` does not
+  depend on `@polaris-auth/client`; its generator reads `packages/client-ts/openapi.json` and emits
+  `src/routes.ts` and a `schema.d.ts` filtered to the routes it calls, so it has no runtime dependency
+  (fetch and WebCrypto only, Node and edge); the logic's own shapes (grant, approval, receipt, session)
+  are typed by hand because example-derived types read an absent field as `null`. `polaris/agent` takes
+  any PSR-18 client and ships a small stream-wrapper client so it works with none installed; its
+  `Routes.php` is generated by `packages/agent/bin/generate-routes`; both are drift-checked in the new
+  `agent-ts` CI job, which also runs the TypeScript SDK's enrol-to-receipt run against the Slim demo.
+  The approval poller polls `GET /agents/session` (the agent's one view of its grants), matches grants by
+  `approval_id`, adds five seconds on `slow_down` or a 429, and stops at the approval's expiry, after
+  `maxAttempts`, or on an abort. Every request JWT binds `htm`, `htu` and, with a body, `body_hash` over
+  the bytes sent; the lifetime defaults to 60 seconds (capped at 300). Receipts verify locally (the
+  PHP-identical canonical JSON, the `receipt+jwt` signature against the server's JWKS by `kid`, the link
+  to a previous receipt when given). The Slim demo registers `oauth` (with `audiences: [<base>/mcp]`),
+  `mcp` and `agents` (one capability `demo.echo`, low risk, auto-approved) and gains `approve.html`, the
+  reference agent approval page; `walkthrough.sh` gains, when `/.well-known/agent-configuration` answers,
+  an MCP `tools/list` with a token exchanged for the `/mcp` resource (curl only) and the agent steps
+  through `examples/slim/bin/agent-walkthrough.php` on `polaris/agent` (no second Node project). The first
+  npm publish of `@polaris-auth/agent` is manual at the release (trusted publishing binds to an existing
+  package).
+- 2026-10-12 · WP4 · Security review of `polaris/mcp`, `polaris/agents` and the oauth-provider changes
+  (before the PR), fixed: (1) a confused deputy: the token exchange is open to any session, so anyone
+  could exchange their own session for a token naming another user's delegated agent's client and
+  execute that agent's grants for its owner; a token naming an agent's client must now have the agent
+  (client credentials) or the agent's subject (the owner; for an organization's agent, the member who
+  registered it) as its `sub`, else `401 agents/invalid_jwt` on every route, `/agents/*` and MCP alike;
+  (2) an agent's OAuth client was created in the registering member's organization, so the
+  organization's self-service client routes could rewrite its credentials and grant types (and mint
+  tokens acting as the owner) or delete it past the kill switch: agents' clients now belong to no
+  organization (the agent row carries it; the plugin manages and erases the client); (3)
+  `AgentRequestMiddleware` was fail-open on spellings of a `location` (`/invite/`, `//invite`,
+  `/./invite`, `/%69nvite`, `http` behind a proxy): locations and request URLs are compared normalised
+  (RFC 3986 §6.2.2, scheme ignored for the match so a proxy's `http` is guarded and then fails the `aud`
+  check), and `requestMiddleware($graph, 'capability')` binds the middleware to a route's capability so
+  every request through it is checked; (4) the policy's auto-approval budget is a ceiling: an asked budget
+  of another kind, larger or with a longer window waits for a person; (5) the MCP protected resource
+  refetches a remote JWKS for an unknown `kid` at most once a minute; (6) a pending grant for the same
+  capability is reused, at most five approvals are pending per agent (`409 agents/conflict`), an approval
+  past its lifetime reads `expired`; (7) a decision parses the constraints first and runs in one
+  transaction; (8) a member who leaves takes the organization's hosts they created with them; (9) an
+  execution locks the agent row first (a concurrent suspend or revoke refuses it rather than racing the
+  seal) and a receipt sequence collision answers `409 agents/conflict`. With the fixes, the agents
+  plugin's `error` member follows every plugin's rule (`agents_not_found`) except for the codes the
+  protocol document defines, which stay bare, and its `401`s answer RFC 6750's `WWW-Authenticate`
+  (`Bearer`, or `Bearer error="invalid_token"`). · Kept as residual risks, with the reason: the replay
+  stores (request-JWT `jti`, the MCP DPoP proofs) are a PSR-16 get then set, as WP2's and WP3's (an
+  atomic `add` is the upgrade); approval user codes (19^8) are stored in clear without an attempt counter,
+  looked up by a signed-in owner behind core's authenticated budget; the `step_up` strength passes for a
+  user without a confirmed factor, exactly core's step-up rule; `aud` is compared with the URL the host
+  builds (a wrong proxy configuration makes valid JWTs fail, never pass); `pattern` constraints run under
+  PCRE's limits on the agent's own request; `agents/invalid_jwt` tells an unknown agent from a bad
+  signature (agent ids are UUIDs and no secret); the `/mcp` tool list under-reports for an autonomous
+  agent's token (every call still runs through the pipeline); receipt signatures have no `exp` by design;
+  the middleware reads and rewinds the body (a non-seekable host stream is a robustness limit); the token
+  endpoint still mints an exchanged token naming another user's agent (dead on every route; refusing it
+  there needs an oauth seam for one caller); an operator may delete an agent's client through
+  `/admin/oauth/clients` (operators are trusted; routing it through the kill switch is a follow-up).
+- 2026-10-12 · WP4 · The Slim demo runs under PHP's built-in server with `public/index.php` as its router
+  (`php -S 127.0.0.1:8080 -t public public/index.php`; the front controller hands real files back to the
+  server): PHP 8.3's built-in server answers its own 404 for any path under a dot directory
+  (`/.well-known/agent-configuration`, and core's `/auth/.well-known/jwks.json`) instead of running
+  `index.php`, which 8.5 does, so CI (8.3) skipped the agent steps while local runs (8.5) passed. The shared
+  walkthrough starts the server with `POLARIS_ROUTER` when a demo sets it, and the Slim demo sets
+  `POLARIS_AGENTS=required` so the agent and MCP steps fail rather than skip when the plugin does not
+  answer; the other demos are unchanged.
