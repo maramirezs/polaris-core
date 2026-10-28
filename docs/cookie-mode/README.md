@@ -1,6 +1,6 @@
 # Cookie token delivery — working folder
 
-`auth.flows.token_delivery: cookie` is documented in `docs/auth/` and validated by `AuthConfig`, but nothing reads it in 0.11. This folder makes it real: the refresh token in an `HttpOnly; Secure; SameSite=Strict` cookie, a CSRF guard on the refresh it authenticates, and the client support.
+`auth.flows.token_delivery: cookie` is documented in `docs/auth/` and validated by `AuthConfig`, but nothing reads it in 0.11. This folder makes it real: the refresh token in an `HttpOnly; Secure; SameSite=Strict` cookie, a CSRF guard on every route that sets or uses it, and the client support.
 
 | File | Read when |
 |---|---|
