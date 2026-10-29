@@ -12,6 +12,8 @@ final readonly class EndpointSpec
     public const array AUTH = ['public', 'bearer', 'mfa_token'];
     public const array EFFECTS = ['read', 'write', 'destructive'];
     public const array SOURCES = ['body', 'path', 'query', 'none'];
+    /** What a route does to the caller's session, for cookie token delivery (docs/cookie-mode/spec.md §2.2). */
+    public const array SESSIONS = ['issue', 'refresh', 'end'];
 
     /**
      * @param list<string> $tags
@@ -22,6 +24,7 @@ final readonly class EndpointSpec
      * @param list<array{status: int, code: string|null}> $errors
      * @param list<string> $events
      * @param string|null $plugin the id of the plugin that declares the route (`admin`), null for core's
+     * @param string|null $session `issue` (opens a session), `refresh` (rotates one), `end` (ends the caller's), null for any other route
      */
     public function __construct(
         public string $file,
@@ -43,6 +46,7 @@ final readonly class EndpointSpec
         public array $errors,
         public array $events,
         public ?string $plugin = null,
+        public ?string $session = null,
     ) {
     }
 

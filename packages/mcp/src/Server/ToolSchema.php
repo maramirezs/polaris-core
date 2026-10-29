@@ -31,7 +31,8 @@ final class ToolSchema
     public function __construct(Manifest $manifest)
     {
         /** @var array<string, array<string, mixed>> $paths */
-        $paths = OpenApi::document($manifest)['paths'];
+        // A tool call always answers its tokens in the body (docs/cookie-mode/spec.md §2.11).
+        $paths = OpenApi::document($manifest, cookieDelivery: false)['paths'];
         $this->paths = $paths;
     }
 

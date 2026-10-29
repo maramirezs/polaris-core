@@ -3397,7 +3397,7 @@ export interface operations {
                             access_token: string;
                             token_type: string;
                             expires_in: number;
-                            refresh_token: string;
+                            refresh_token?: string;
                             user: {
                                 id: string;
                                 email: string;
@@ -3428,7 +3428,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description email_unverified | account_disabled */
+            /** @description email_unverified | account_disabled | csrf_failed | insecure_transport */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4477,13 +4477,22 @@ export interface operations {
                             access_token: string;
                             token_type: string;
                             expires_in: number;
-                            refresh_token: string;
+                            refresh_token?: string;
                         };
                     };
                 };
             };
             /** @description unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description csrf_failed | insecure_transport */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4940,7 +4949,7 @@ export interface operations {
             content: {
                 "application/json": {
                     /** Format: password */
-                    refresh_token: string;
+                    refresh_token?: string;
                 };
             };
         };
@@ -4966,13 +4975,22 @@ export interface operations {
                             access_token: string;
                             token_type: string;
                             expires_in: number;
-                            refresh_token: string;
+                            refresh_token?: string;
                         };
                     };
                 };
             };
             /** @description invalid_grant */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description csrf_failed | insecure_transport */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9913,7 +9931,7 @@ export interface operations {
                             access_token: string;
                             token_type: string;
                             expires_in: number;
-                            refresh_token: string;
+                            refresh_token?: string;
                             user: {
                                 id: string;
                                 email: string;
@@ -9921,6 +9939,15 @@ export interface operations {
                             };
                         };
                     };
+                };
+            };
+            /** @description csrf_failed | insecure_transport */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
             /** @description sso_invalid_input | sso_code_invalid */
@@ -12274,7 +12301,7 @@ export interface operations {
                             access_token: string;
                             token_type: string;
                             expires_in: number;
-                            refresh_token: string;
+                            refresh_token?: string;
                             user: {
                                 id: string;
                                 email: string;
@@ -12284,7 +12311,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description passwordless_account_disabled */
+            /** @description passwordless_account_disabled | csrf_failed | insecure_transport */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -12346,7 +12373,7 @@ export interface operations {
                             access_token: string;
                             token_type: string;
                             expires_in: number;
-                            refresh_token: string;
+                            refresh_token?: string;
                             user: {
                                 id: string;
                                 email: string;
@@ -12354,6 +12381,15 @@ export interface operations {
                             };
                         };
                     };
+                };
+            };
+            /** @description csrf_failed | insecure_transport */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
             /** @description passwordless_invalid_input | passwordless_token_invalid */
@@ -12550,7 +12586,7 @@ export interface operations {
                             access_token: string;
                             token_type: string;
                             expires_in: number;
-                            refresh_token: string;
+                            refresh_token?: string;
                             user: {
                                 id: string;
                                 email: string;
@@ -12558,6 +12594,15 @@ export interface operations {
                             };
                         };
                     };
+                };
+            };
+            /** @description csrf_failed | insecure_transport */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
             /** @description passwordless_invalid_input | passwordless_token_invalid */
@@ -12783,7 +12828,7 @@ export interface operations {
                             access_token: string;
                             token_type: string;
                             expires_in: number;
-                            refresh_token: string;
+                            refresh_token?: string;
                             user: {
                                 id: string;
                                 email: string;
@@ -12793,7 +12838,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description passwordless_account_disabled */
+            /** @description passwordless_account_disabled | csrf_failed | insecure_transport */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -12856,7 +12901,7 @@ export interface operations {
                             access_token: string;
                             token_type: string;
                             expires_in: number;
-                            refresh_token: string;
+                            refresh_token?: string;
                             user: {
                                 id: string;
                                 email: string;
@@ -12875,7 +12920,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description username_email_unverified | username_account_disabled */
+            /** @description username_email_unverified | username_account_disabled | csrf_failed | insecure_transport */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -13066,7 +13111,7 @@ export interface operations {
                             access_token: string;
                             token_type: string;
                             expires_in: number;
-                            refresh_token: string;
+                            refresh_token?: string;
                             user: {
                                 id: string;
                                 email: string;
@@ -13074,6 +13119,15 @@ export interface operations {
                             };
                         };
                     };
+                };
+            };
+            /** @description csrf_failed | insecure_transport */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -13279,7 +13333,7 @@ export interface operations {
                             access_token: string;
                             token_type: string;
                             expires_in: number;
-                            refresh_token: string;
+                            refresh_token?: string;
                             user: {
                                 id: string;
                                 email: string;
@@ -13298,7 +13352,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description multi_session_device_unknown */
+            /** @description multi_session_device_unknown | csrf_failed | insecure_transport */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -13571,7 +13625,7 @@ export interface operations {
                             access_token: string;
                             token_type: string;
                             expires_in: number;
-                            refresh_token: string;
+                            refresh_token?: string;
                             user: {
                                 id: string;
                                 email: string;
@@ -13579,6 +13633,15 @@ export interface operations {
                             };
                         };
                     };
+                };
+            };
+            /** @description csrf_failed | insecure_transport */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
             /** @description social_code_invalid | social_invalid_input */
@@ -13703,7 +13766,7 @@ export interface operations {
                             access_token: string;
                             token_type: string;
                             expires_in: number;
-                            refresh_token: string;
+                            refresh_token?: string;
                             user: {
                                 id: string;
                                 email: string;
@@ -13713,7 +13776,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description social_provider_error | social_account_disabled | social_email_unverified */
+            /** @description social_provider_error | social_account_disabled | social_email_unverified | csrf_failed | insecure_transport */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -14020,7 +14083,7 @@ export interface operations {
                             access_token: string;
                             token_type: string;
                             expires_in: number;
-                            refresh_token: string;
+                            refresh_token?: string;
                             user: {
                                 id: string;
                                 email: string;
@@ -14030,7 +14093,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description passkey_account_disabled | passkey_email_unverified | passkey_user_verification_required | passkey_origin_mismatch */
+            /** @description passkey_account_disabled | passkey_email_unverified | passkey_user_verification_required | passkey_origin_mismatch | csrf_failed | insecure_transport */
             403: {
                 headers: {
                     [name: string]: unknown;

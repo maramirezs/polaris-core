@@ -9,6 +9,7 @@ endpoint:
   rate_limit: token_refresh
   effect: write
   receipt: true
+  session: refresh               # rotates the session: in cookie delivery the cookie can be the credential
 
 input:
   source: body

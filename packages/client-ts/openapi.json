@@ -338,6 +338,7 @@
                 ],
                 "x-polaris-effect": "write",
                 "x-polaris-receipt": true,
+                "x-polaris-session": "issue",
                 "x-polaris-rate-limit": "login",
                 "requestBody": {
                     "required": true,
@@ -414,7 +415,6 @@
                                                         "access_token",
                                                         "token_type",
                                                         "expires_in",
-                                                        "refresh_token",
                                                         "user"
                                                     ]
                                                 }
@@ -530,7 +530,7 @@
                         }
                     },
                     "403": {
-                        "description": "email_unverified | account_disabled",
+                        "description": "email_unverified | account_disabled | csrf_failed | insecure_transport",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -561,6 +561,7 @@
                 ],
                 "x-polaris-effect": "destructive",
                 "x-polaris-receipt": true,
+                "x-polaris-session": "end",
                 "security": [
                     {
                         "bearerAuth": []
@@ -620,6 +621,7 @@
                 ],
                 "x-polaris-effect": "write",
                 "x-polaris-receipt": true,
+                "x-polaris-session": "end",
                 "security": [
                     {
                         "bearerAuth": []
@@ -2143,6 +2145,7 @@
                 ],
                 "x-polaris-effect": "write",
                 "x-polaris-receipt": true,
+                "x-polaris-session": "issue",
                 "x-polaris-rate-limit": "mfa_confirm",
                 "security": [
                     {
@@ -2203,8 +2206,7 @@
                                             "required": [
                                                 "access_token",
                                                 "token_type",
-                                                "expires_in",
-                                                "refresh_token"
+                                                "expires_in"
                                             ]
                                         }
                                     },
@@ -2249,6 +2251,16 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ValidationError"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "csrf_failed | insecure_transport",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
                                 }
                             }
                         }
@@ -2915,6 +2927,7 @@
                 ],
                 "x-polaris-effect": "write",
                 "x-polaris-receipt": true,
+                "x-polaris-session": "refresh",
                 "x-polaris-rate-limit": "token_refresh",
                 "requestBody": {
                     "required": true,
@@ -2928,10 +2941,7 @@
                                         "format": "password",
                                         "x-polaris-sensitive": true
                                     }
-                                },
-                                "required": [
-                                    "refresh_token"
-                                ]
+                                }
                             }
                         }
                     }
@@ -2963,8 +2973,7 @@
                                             "required": [
                                                 "access_token",
                                                 "token_type",
-                                                "expires_in",
-                                                "refresh_token"
+                                                "expires_in"
                                             ]
                                         }
                                     },
@@ -2999,6 +3008,16 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ValidationError"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "csrf_failed | insecure_transport",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
                                 }
                             }
                         }
@@ -11258,6 +11277,7 @@
                 "x-polaris-effect": "write",
                 "x-polaris-receipt": false,
                 "x-polaris-plugin": "sso",
+                "x-polaris-session": "issue",
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -11323,7 +11343,6 @@
                                                 "access_token",
                                                 "token_type",
                                                 "expires_in",
-                                                "refresh_token",
                                                 "user"
                                             ]
                                         }
@@ -11357,6 +11376,16 @@
                                 }
                             }
                         }
+                    },
+                    "403": {
+                        "description": "csrf_failed | insecure_transport",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Problem"
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -11371,6 +11400,7 @@
                 "x-polaris-effect": "write",
                 "x-polaris-receipt": true,
                 "x-polaris-plugin": "sso",
+                "x-polaris-session": "end",
                 "security": [
                     {
                         "bearerAuth": []
@@ -15187,6 +15217,7 @@
                 "x-polaris-effect": "write",
                 "x-polaris-receipt": true,
                 "x-polaris-plugin": "passwordless",
+                "x-polaris-session": "issue",
                 "x-polaris-rate-limit": "token_consume",
                 "requestBody": {
                     "required": true,
@@ -15261,7 +15292,6 @@
                                                 "access_token",
                                                 "token_type",
                                                 "expires_in",
-                                                "refresh_token",
                                                 "user"
                                             ]
                                         }
@@ -15287,7 +15317,7 @@
                         }
                     },
                     "403": {
-                        "description": "passwordless_account_disabled",
+                        "description": "passwordless_account_disabled | csrf_failed | insecure_transport",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -15319,6 +15349,7 @@
                 "x-polaris-effect": "write",
                 "x-polaris-receipt": false,
                 "x-polaris-plugin": "passwordless",
+                "x-polaris-session": "issue",
                 "x-polaris-rate-limit": "token_consume",
                 "requestBody": {
                     "required": true,
@@ -15387,7 +15418,6 @@
                                                 "access_token",
                                                 "token_type",
                                                 "expires_in",
-                                                "refresh_token",
                                                 "user"
                                             ]
                                         }
@@ -15414,6 +15444,16 @@
                     },
                     "422": {
                         "description": "passwordless_invalid_input | passwordless_token_invalid",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Problem"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "csrf_failed | insecure_transport",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -15648,6 +15688,7 @@
                 "x-polaris-effect": "write",
                 "x-polaris-receipt": true,
                 "x-polaris-plugin": "passwordless",
+                "x-polaris-session": "issue",
                 "x-polaris-rate-limit": "token_consume",
                 "requestBody": {
                     "required": true,
@@ -15716,7 +15757,6 @@
                                                 "access_token",
                                                 "token_type",
                                                 "expires_in",
-                                                "refresh_token",
                                                 "user"
                                             ]
                                         }
@@ -15743,6 +15783,16 @@
                     },
                     "422": {
                         "description": "passwordless_invalid_input | passwordless_token_invalid",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Problem"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "csrf_failed | insecure_transport",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -16042,6 +16092,7 @@
                 "x-polaris-effect": "write",
                 "x-polaris-receipt": true,
                 "x-polaris-plugin": "passwordless",
+                "x-polaris-session": "issue",
                 "x-polaris-rate-limit": "token_consume",
                 "requestBody": {
                     "required": true,
@@ -16115,7 +16166,6 @@
                                                 "access_token",
                                                 "token_type",
                                                 "expires_in",
-                                                "refresh_token",
                                                 "user"
                                             ]
                                         }
@@ -16141,7 +16191,7 @@
                         }
                     },
                     "403": {
-                        "description": "passwordless_account_disabled",
+                        "description": "passwordless_account_disabled | csrf_failed | insecure_transport",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -16173,6 +16223,7 @@
                 "x-polaris-effect": "write",
                 "x-polaris-receipt": true,
                 "x-polaris-plugin": "username",
+                "x-polaris-session": "issue",
                 "x-polaris-rate-limit": "login",
                 "requestBody": {
                     "required": true,
@@ -16246,7 +16297,6 @@
                                                 "access_token",
                                                 "token_type",
                                                 "expires_in",
-                                                "refresh_token",
                                                 "user"
                                             ]
                                         }
@@ -16282,7 +16332,7 @@
                         }
                     },
                     "403": {
-                        "description": "username_email_unverified | username_account_disabled",
+                        "description": "username_email_unverified | username_account_disabled | csrf_failed | insecure_transport",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -16532,6 +16582,7 @@
                 "x-polaris-effect": "write",
                 "x-polaris-receipt": true,
                 "x-polaris-plugin": "anonymous",
+                "x-polaris-session": "issue",
                 "x-polaris-rate-limit": "register",
                 "responses": {
                     "201": {
@@ -16580,7 +16631,6 @@
                                                 "access_token",
                                                 "token_type",
                                                 "expires_in",
-                                                "refresh_token",
                                                 "user"
                                             ]
                                         }
@@ -16601,6 +16651,16 @@
                                             "email_verified": false
                                         }
                                     }
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "csrf_failed | insecure_transport",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Problem"
                                 }
                             }
                         }
@@ -16873,6 +16933,7 @@
                 "x-polaris-effect": "write",
                 "x-polaris-receipt": true,
                 "x-polaris-plugin": "multi-session",
+                "x-polaris-session": "issue",
                 "security": [
                     {
                         "bearerAuth": []
@@ -16943,7 +17004,6 @@
                                                 "access_token",
                                                 "token_type",
                                                 "expires_in",
-                                                "refresh_token",
                                                 "user"
                                             ]
                                         }
@@ -16979,7 +17039,7 @@
                         }
                     },
                     "403": {
-                        "description": "multi_session_device_unknown",
+                        "description": "multi_session_device_unknown | csrf_failed | insecure_transport",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -17355,6 +17415,7 @@
                 "x-polaris-effect": "write",
                 "x-polaris-receipt": false,
                 "x-polaris-plugin": "social",
+                "x-polaris-session": "issue",
                 "x-polaris-rate-limit": "token_consume",
                 "requestBody": {
                     "required": true,
@@ -17423,7 +17484,6 @@
                                                 "access_token",
                                                 "token_type",
                                                 "expires_in",
-                                                "refresh_token",
                                                 "user"
                                             ]
                                         }
@@ -17450,6 +17510,16 @@
                     },
                     "422": {
                         "description": "social_code_invalid | social_invalid_input",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Problem"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "csrf_failed | insecure_transport",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -17586,6 +17656,7 @@
                 "x-polaris-effect": "write",
                 "x-polaris-receipt": true,
                 "x-polaris-plugin": "social",
+                "x-polaris-session": "issue",
                 "x-polaris-rate-limit": "login",
                 "requestBody": {
                     "required": true,
@@ -17654,7 +17725,6 @@
                                                 "access_token",
                                                 "token_type",
                                                 "expires_in",
-                                                "refresh_token",
                                                 "user"
                                             ]
                                         }
@@ -17680,7 +17750,7 @@
                         }
                     },
                     "403": {
-                        "description": "social_provider_error | social_account_disabled | social_email_unverified",
+                        "description": "social_provider_error | social_account_disabled | social_email_unverified | csrf_failed | insecure_transport",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -18095,6 +18165,7 @@
                 "x-polaris-effect": "write",
                 "x-polaris-receipt": true,
                 "x-polaris-plugin": "passkey",
+                "x-polaris-session": "issue",
                 "x-polaris-rate-limit": "login",
                 "requestBody": {
                     "required": true,
@@ -18162,7 +18233,6 @@
                                                 "access_token",
                                                 "token_type",
                                                 "expires_in",
-                                                "refresh_token",
                                                 "user"
                                             ]
                                         }
@@ -18188,7 +18258,7 @@
                         }
                     },
                     "403": {
-                        "description": "passkey_account_disabled | passkey_email_unverified | passkey_user_verification_required | passkey_origin_mismatch",
+                        "description": "passkey_account_disabled | passkey_email_unverified | passkey_user_verification_required | passkey_origin_mismatch | csrf_failed | insecure_transport",
                         "content": {
                             "application/problem+json": {
                                 "schema": {

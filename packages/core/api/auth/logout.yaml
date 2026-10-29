@@ -7,6 +7,7 @@ endpoint:
   auth: bearer
   effect: write
   receipt: true
+  session: end                   # ends the caller's session: in cookie delivery the cookie is cleared
 
 input:
   source: none

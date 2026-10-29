@@ -54,10 +54,7 @@ A new optional key in the endpoint spec, `endpoint.session`, declares what a rou
 
 `schema.json` gains `"session": { "enum": ["issue", "refresh", "end"] }`; `EndpointSpec` gains `public ?string $session = null`; `Loader` reads and validates it. `polaris manifest` and the OpenAPI document carry it (as `x-polaris-session` on the operation). Adding the key changes no response in body mode.
 
-**Version skew.** Because an older `Loader` ignores the key and a route without it is untouched, a host running the new core in cookie mode with a plugin released before this change would get that plugin's refresh token in the body, silently. Two things close that:
-
-- `polaris/core`'s `composer.json` declares `conflict` on every plugin that carries an `issue` route (`polaris/username`, `anonymous`, `multi-session`, `passkey`, `passwordless`, `social`, `sso`) below the release that marks it.
-- A coverage test walks the manifest of core and every plugin: a route whose `output.example` has `data.refresh_token` either has `session: issue | refresh` or is on an explicit list of exceptions, which holds `POST /oauth2/token` alone. A future plugin that forgets the key fails the build.
+**Version skew.** Because an older `Loader` ignores the key and a route without it is untouched, a host running the new core in cookie mode with a plugin released before this change would get that plugin's refresh token in the body, silently. The sibling constraints already rule that out: every package requires the others with `^0.<minor>`, which excludes the next minor, so a plugin released before this change cannot install next to the core that reads the key (decisions.md, 2026-10-29). What remains is a route that forgets the key, and a coverage test closes that: it walks the manifest of core and every plugin, and a route whose `output.example` has `data.refresh_token` either has `session: issue | refresh` or is on an explicit list of exceptions, which holds `POST /oauth2/token` alone.
 
 ### 2.3 The middleware
 
@@ -166,7 +163,7 @@ Every response in body mode; every route without `session`; `TokenService`; `pol
 - `docs/auth/api-reference.md` and `packages/core/api/README.md`: the `session` key and what cookie mode does to the marked routes.
 - `packages/psr15/README.md`, `packages/client-ts/README.md`: the middleware, `tokenDelivery` and `refreshSession()`.
 - `packages/mcp/README.md`: tools always get tokens in the body.
-- `CHANGELOG.md` for the release, with the new `conflict` constraints.
+- `CHANGELOG.md` for the release.
 
 ---
 
@@ -192,7 +189,7 @@ Functional tests under `packages/core/tests/Functional` (so they replay through 
 
 **Harness work the tests need.** None of this exists in 0.11:
 
-- `FunctionalTestCase` builds path-only requests (no scheme). Cookie-mode tests build `https://` URIs, and the Laravel and Symfony harnesses, which convert through HttpFoundation, also set `HTTPS=on` in the server params, since HttpFoundation takes the scheme from there, not from the PSR-7 URI.
+- `FunctionalTestCase` builds path-only requests (no scheme). Cookie-mode tests build `https://` URIs; the Laravel and Symfony harnesses need nothing more, since the PSR-7 bridge sets `HTTPS=on` from the URI's scheme (decisions.md, 2026-10-29).
 - Cookies travel as cookie params (`withCookieParams()`), which is what HttpFoundation reads and what the middleware reads; a `Cookie` header alone is ignored by both.
 - Symfony re-serialises `Set-Cookie` (lower-case attributes, an added `expires`), so assertions parse the header into name, value and attributes and compare those, not the raw string.
 - `FunctionalTestCase::authConfigArray()` reads only environment variables; it gains an overridable hook (like `plugins()`) so a test class can turn cookie mode on.
@@ -203,7 +200,7 @@ Client: unit tests for the header, the optional types and `refreshSession()` (lo
 
 ## 6. Release
 
-One minor release after 0.11 (the next free number when this merges), with the `conflict` entries of §2.2. `univeros/polaris` raises its `polaris/*` constraints in its own repository; nothing else there changes.
+One minor release after 0.11 (the next free number when this merges). `univeros/polaris` raises its `polaris/*` constraints in its own repository; nothing else there changes.
 
 ---
 
@@ -214,7 +211,7 @@ One minor release after 0.11 (the next free number when this merges), with the `
 **Acceptance criteria**
 
 - [ ] `session` key in `schema.json`, `EndpointSpec`, `Loader`, the manifest and OpenAPI output; the routes of §2.2 marked.
-- [ ] The coverage test of §2.2 green; `conflict` entries in `polaris/core`'s `composer.json`.
+- [ ] The coverage test of §2.2 green.
 - [ ] `RefreshCookieMiddleware` in `polaris/psr15`, registered only in cookie mode, at the position of §2.3; the guard on every `issue` and `refresh` request.
 - [ ] `polaris/mcp`'s `Dispatcher` pipeline in body mode whatever the configuration (§2.11).
 - [ ] `flows.cookie.trusted_origins` in `AuthConfig`, validated at boot.
@@ -230,7 +227,7 @@ One minor release after 0.11 (the next free number when this merges), with the `
 
 Defaults are what this spec does if the answer is "fine".
 
-1. **The `session` key** in the endpoint YAML, against a list of route names in the middleware. *Default:* the key (plugins declare their own routes; rule 6), with the coverage test and the `conflict` entries of §2.2 against version skew.
+1. **The `session` key** in the endpoint YAML, against a list of route names in the middleware. *Default:* the key (plugins declare their own routes; rule 6), with the coverage test of §2.2.
 2. **The CSRF guard**: a custom header plus an `Origin` check (§2.5), against a double-submit token. *Default:* header plus `Origin`; it needs no state and no readable cookie.
 3. **Body fallback on refresh in cookie mode**: a refresh that sends `refresh_token` in the body is still accepted, behind the same guard as any other cookie-mode refresh, and its new secret goes to the cookie. It does not keep a body-mode client working (that client loses the rotated token, see question 4); what it buys is migration: when a host switches to cookie mode, a browser session that still holds a body token moves into the cookie on its next refresh instead of being signed out. *Default:* accepted. The alternative is to refuse it with 422 and sign those sessions out at the switch.
 4. **One mode per host.** A cookie-mode host gives no refresh token in the body to anyone, so a native app on the same host cannot sign in usefully. *Default:* accept that for now; a per-request opt-in (a request header choosing the delivery) is a later change. MCP tools are the one exception (§2.11).

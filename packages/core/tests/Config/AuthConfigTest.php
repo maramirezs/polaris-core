@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Polaris\Tests\Config;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Polaris\Config\AuthConfig;
 use Polaris\Exception\InvalidConfigException;
@@ -29,6 +30,7 @@ final class AuthConfigTest extends TestCase
         self::assertSame(12, $config->passwordMinLength);
         self::assertSame('argon2id', $config->passwordAlgo);
         self::assertSame('body', $config->tokenDelivery);
+        self::assertSame([], $config->cookieTrustedOrigins);
         self::assertSame(300, $config->stepUpMaxAge);
         self::assertTrue($config->requireVerifiedEmail);
         self::assertFalse($config->mfaEnforce);
@@ -87,6 +89,35 @@ final class AuthConfigTest extends TestCase
         $this->expectException(InvalidConfigException::class);
 
         AuthConfig::fromArray(['issuer' => 'x', 'flows' => ['token_delivery' => 'header']]);
+    }
+
+    public function testNormalisesTrustedOriginsAsABrowserSendsThem(): void
+    {
+        $config = AuthConfig::fromArray(['issuer' => 'x', 'flows' => ['token_delivery' => 'cookie', 'cookie' => ['trusted_origins' => ['https://App.Example.com', 'https://app.example.com:443', 'https://app.example.com:8443']]]]);
+
+        self::assertSame(['https://app.example.com', 'https://app.example.com', 'https://app.example.com:8443'], $config->cookieTrustedOrigins);
+    }
+
+    /**
+     * @return iterable<string, array{mixed}>
+     */
+    public static function invalidTrustedOrigins(): iterable
+    {
+        yield 'plaintext' => [['http://app.example.com']];
+        yield 'a path' => [['https://app.example.com/']];
+        yield 'a query' => [['https://app.example.com?x=1']];
+        yield 'credentials' => [['https://user@app.example.com']];
+        yield 'not a URL' => [['app.example.com']];
+        yield 'not a list' => ['https://app.example.com'];
+        yield 'not a string' => [[42]];
+    }
+
+    #[DataProvider('invalidTrustedOrigins')]
+    public function testRejectsATrustedOriginThatIsNotAnHttpsOrigin(mixed $origins): void
+    {
+        $this->expectException(InvalidConfigException::class);
+
+        AuthConfig::fromArray(['issuer' => 'x', 'flows' => ['cookie' => ['trusted_origins' => $origins]]]);
     }
 
     public function testRejectsInvalidTotpDigits(): void

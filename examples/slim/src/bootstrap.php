@@ -22,6 +22,7 @@ use PolarisDemo\Dispatcher;
 use PolarisDemo\Env;
 use PolarisDemo\FakeProvider;
 use PolarisDemo\FileCache;
+use PolarisDemo\ForwardedHttps;
 use PolarisDemo\LoopbackClient;
 use PolarisDemo\FileMailer;
 use Psr\Http\Message\ResponseInterface;
@@ -46,11 +47,14 @@ $dispatcher = new Dispatcher();
 $baseUrl = rtrim((string) (getenv('POLARIS_BASE_URL') ?: 'http://localhost:8080'), '/');
 $app = AppFactory::create();
 $app->addBodyParsingMiddleware();
+// Behind the local TLS proxy of the cookie-delivery e2e, the request keeps the https URI the browser used.
+$app->add(new ForwardedHttps());
 // The demo's own OAuth 2 server and mailbox, outside Polaris's routes.
 FakeProvider::register($app, $root);
 $polaris = Polaris::create(new Config(
     secrets: EnvironmentConfig::secrets(),
-    auth: EnvironmentConfig::auth(),
+    // POLARIS_TOKEN_DELIVERY=cookie puts the refresh token in an HttpOnly cookie (served over https only).
+    auth: EnvironmentConfig::auth(overrides: getenv('POLARIS_TOKEN_DELIVERY') === 'cookie' ? ['flows' => ['token_delivery' => 'cookie']] : []),
     database: new PdoAdapter($pdo),
     mailer: new FileMailer($root . '/var/mail.log'),
     // php -S runs every request in a fresh process: the plugins' short-lived state (OAuth states, passkey

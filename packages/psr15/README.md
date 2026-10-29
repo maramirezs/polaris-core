@@ -42,6 +42,18 @@ permissions) from the manifest, so nothing is configured per route. Your own mid
 read the request attributes named in `Polaris\Http\Attributes`: `TOKEN` (the verified token),
 `IP_ADDRESS`, `USER_AGENT`.
 
+### Cookie token delivery
+
+With `auth.flows.token_delivery: cookie`, `middleware()` adds `RefreshCookieMiddleware` right after the
+per-IP limiter (`docs/cookie-mode/spec.md`): on the routes whose spec has `session`, the refresh token moves
+from the body to `__Secure-polaris_refresh` (`HttpOnly; Secure; SameSite=Strict`, `Path` the refresh route
+under `pathPrefix`), a refresh may present the cookie instead of a body field, sign-in and refresh pass a
+CSRF guard (`X-Polaris-CSRF: 1` plus an `Origin` check against the request's own origin and
+`auth.flows.cookie.trusted_origins`) and refuse a non-`https` request URI, and logout clears the cookie.
+Behind a TLS-terminating proxy, the host's trusted-proxy handling must hand the pipeline the `https` URI the
+browser used. `new Pipeline(..., bodyDelivery: true)` keeps body delivery whatever the configuration, for an
+in-process caller with no cookie jar (`polaris/mcp`'s tool calls).
+
 ## License
 
 MIT. Polaris for PHP is created and maintained by [2am.tech](https://2am.tech).

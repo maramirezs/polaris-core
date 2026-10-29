@@ -315,6 +315,23 @@ final class PluginTest extends TestCase
         self::assertStringContainsString('does not authenticate', $tester->getDisplay());
     }
 
+    public function testToolsAnswerTokensInTheBodyInCookieDelivery(): void
+    {
+        $graph = $this->graph(auth: ['flows' => ['token_delivery' => 'cookie']]);
+        $user = $this->user($graph);
+        $user->passwordHash = $graph->passwordHasher()->hash('correct horse battery staple');
+        $graph->unitOfWork()->persist($user);
+        $graph->unitOfWork()->flush();
+
+        // No cookie jar behind a tool call: the dispatcher's pipeline keeps body delivery (docs/cookie-mode/spec.md §2.11).
+        $tools = $graph->get(ManifestTools::class)->for(Principal::anonymous());
+        $login = $tools[array_search('polaris.auth.login', array_map(static fn(Tool $tool): string => $tool->name, $tools), true)];
+        $answer = ($login->call)(['email' => 'ada@example.com', 'password' => 'correct horse battery staple']);
+        self::assertSame(200, $answer['status'], (string) json_encode($answer));
+        self::assertIsArray($answer['body']);
+        self::assertIsString($answer['body']['data']['refresh_token']);
+    }
+
     public function testTheHttpTransportServesEitherEra(): void
     {
         $meta = ['_meta' => ['io.modelcontextprotocol/protocolVersion' => '2026-07-28', 'io.modelcontextprotocol/clientCapabilities' => new \stdClass()]];
@@ -390,14 +407,15 @@ final class PluginTest extends TestCase
 
     /**
      * @param list<Plugin> $plugins
+     * @param array<string, mixed> $auth
      */
-    private function graph(array $plugins = []): Graph
+    private function graph(array $plugins = [], array $auth = []): Graph
     {
         $keys = TestKeys::rsa();
 
         return Polaris::create(new Config(
             secrets: Secrets::fromEnvironment(['APP_KEY' => str_repeat('k', 32), 'AUTH_JWT_PRIVATE_KEY' => $keys['private'], 'AUTH_JWT_PUBLIC_KEY' => $keys['public'], 'AUTH_JWT_KID' => 'test']),
-            auth: AuthConfig::fromArray(['issuer' => self::BASE]),
+            auth: AuthConfig::fromArray(['issuer' => self::BASE, ...$auth]),
             database: new InMemoryAdapter(),
             plugins: [...$plugins, new McpPlugin(self::BASE, new ServerRequestFactory(), new ResponseFactory(), new StreamFactory())],
         ))->graph();

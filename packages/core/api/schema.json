@@ -18,7 +18,8 @@
                 "requires_permissions": { "type": "array", "items": { "type": "string" } },
                 "rate_limit": { "type": "string" },
                 "effect": { "enum": ["read", "write", "destructive"] },
-                "receipt": { "type": "boolean", "description": "Defaults to true for write and destructive, false for read." }
+                "receipt": { "type": "boolean", "description": "Defaults to true for write and destructive, false for read." },
+                "session": { "enum": ["issue", "refresh", "end"], "description": "What the route does to the caller's session: issue opens one, refresh rotates one, end ends the caller's. In cookie token delivery the refresh token of an issue or refresh route moves to a cookie (docs/cookie-mode/spec.md)." }
             }
         },
         "input": {

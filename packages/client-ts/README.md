@@ -25,9 +25,9 @@ if (login.data && "access_token" in login.data.data) {          // a session, or
 }
 ```
 
-`createClient({ baseUrl, token, challenge, fetch, headers })` takes `openapi-fetch`'s options plus `token`,
-sent as `Authorization: Bearer` on every request (an access token, or the `mfa_token` for the MFA gate), and
-`challenge` (below); `withToken(token)` returns a new client bound to another token, `token: null` an
+`createClient({ baseUrl, token, challenge, tokenDelivery, fetch, headers })` takes `openapi-fetch`'s options plus `token`,
+sent as `Authorization: Bearer` on every request (an access token, or the `mfa_token` for the MFA gate),
+`challenge` and `tokenDelivery` (below); `withToken(token)` returns a new client bound to another token, `token: null` an
 anonymous one. Nothing else: when to refresh and where to keep tokens is your application's policy. Every method of
 `openapi-fetch` is there (`GET`, `POST`, `PATCH`, `DELETE`, `use` for middleware).
 
@@ -108,6 +108,28 @@ const accounts = await polaris.withToken(access).multiSession.list({ headers: { 
 const other = await polaris.withToken(access).multiSession.switch({ body: { session_id: accounts.data!.data[1]!.session_id }, headers: { "X-Polaris-Device": device } });
 const button = (await polaris.multiSession.lastMethod({ headers: { "X-Polaris-Device": device } })).data?.data.last_method;
 ```
+
+## Cookie token delivery
+
+When the host runs `auth.flows.token_delivery: cookie`, the refresh token never reaches JavaScript: the
+sign-in routes and the refresh set it in an `HttpOnly` cookie scoped to `/auth/token/refresh`, and their
+`data` carries the access token alone (`refresh_token` is optional in the types for that reason).
+
+```ts
+import { createClient, refreshSession } from "@polaris-auth/client";
+
+const polaris = createClient({ baseUrl, tokenDelivery: "cookie" });   // sends X-Polaris-CSRF: 1 on every request
+const login = await polaris.POST("/auth/login", { body: { email, password } });
+// ... the access token expires, or the page reloads:
+const refreshed = await refreshSession(polaris);                       // POST /auth/token/refresh with {}
+const access = refreshed.data?.data.access_token;
+```
+
+`refreshSession` runs under the Web Lock `polaris:refresh`, so the tabs of one browser refresh one at a time:
+with rotation, two tabs presenting the same cookie at once would trip reuse detection and end the session.
+Without the Web Locks API, concurrent calls in one tab share one request. `credentials` stays at the `fetch`
+default (`same-origin`); a page on a trusted origin of the same site passes `credentials: "include"` (and
+the host adds a CORS layer that allows it). The host must serve Polaris over `https`.
 
 ## The sentinel challenge
 
