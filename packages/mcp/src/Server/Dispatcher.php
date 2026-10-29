@@ -52,7 +52,8 @@ final class Dispatcher
     ) {
         $this->baseUrl = rtrim($baseUrl, '/');
         $path = (string) parse_url($this->baseUrl, PHP_URL_PATH);
-        $this->pipeline = new Pipeline($graph, $responses, $path === '' ? '/' : $path);
+        // No cookie jar here: the sign-in and refresh tools answer their tokens in the body in every delivery mode.
+        $this->pipeline = new Pipeline($graph, $responses, $path === '' ? '/' : $path, bodyDelivery: true);
     }
 
     /**

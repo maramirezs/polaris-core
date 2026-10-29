@@ -208,7 +208,7 @@ jobs:
           npm run typecheck
           npm test
 
-      - name: The passkey page of the Slim demo in Chromium with a virtual authenticator
+      - name: The Slim demo in Chromium (the passkey page with a virtual authenticator, cookie token delivery behind a local TLS proxy)
         working-directory: packages/client-ts
         run: |
           npx playwright install --with-deps chromium

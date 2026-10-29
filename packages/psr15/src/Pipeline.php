@@ -11,6 +11,7 @@ use Polaris\Psr15\Middleware\ClientContextMiddleware;
 use Polaris\Psr15\Middleware\DenylistMiddleware;
 use Polaris\Psr15\Middleware\MfaTokenMiddleware;
 use Polaris\Psr15\Middleware\RateLimiter;
+use Polaris\Psr15\Middleware\RefreshCookieMiddleware;
 use Polaris\Psr15\Middleware\StepUpMiddleware;
 use Polaris\Psr15\Middleware\TokenAuthenticationMiddleware;
 use Polaris\Psr15\Middleware\UnauthorizedResponder;
@@ -22,6 +23,7 @@ use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 
 use function array_reverse;
+use function rtrim;
 
 /**
  * The PSR-15 face of a Polaris {@see Graph}: the ordered middleware (§5.4) and the request
@@ -34,10 +36,15 @@ final class Pipeline
     private readonly UnauthorizedResponder $unauthorized;
     private readonly RateLimiter $limiter;
 
+    /**
+     * @param bool $bodyDelivery tokens in the JSON body whatever `auth.flows.token_delivery` says: for an in-process
+     *                           caller with no cookie jar (polaris/mcp's tool calls, docs/cookie-mode/spec.md §2.11)
+     */
     public function __construct(
         private readonly Graph $graph,
         private readonly ResponseFactoryInterface $responseFactory,
-        string $pathPrefix = '/',
+        private readonly string $pathPrefix = '/',
+        private readonly bool $bodyDelivery = false,
     ) {
         $this->router = new Router($graph->manifest(), $pathPrefix);
         $this->json = new JsonResponse($responseFactory);
@@ -47,7 +54,7 @@ final class Pipeline
 
     /**
      * Routing first, then the order the 1.0 module registered (by priority): ClientContext,
-     * AuthRateLimit, MfaToken, TokenAuthentication (the plugins' bearer resolvers first), the plugins' middleware, StepUp, Denylist,
+     * AuthRateLimit, in cookie token delivery RefreshCookie (docs/cookie-mode/spec.md §2.3), MfaToken, TokenAuthentication (the plugins' bearer resolvers first), the plugins' middleware, StepUp, Denylist,
      * AuthenticatedRateLimit, Authorization. The per-user limiter wraps authorization, so a 403 carries the rate-limit
      * headers, as in 1.0.
      *
@@ -68,6 +75,7 @@ final class Pipeline
             new RouteMiddleware($this->router, $this->json),
             new ClientContextMiddleware(),
             new AuthRateLimitMiddleware($this->graph->rateLimits(), $this->limiter),
+            ...$this->cookieDelivery(),
             new MfaTokenMiddleware($this->graph->mfaLoginTokens(), $this->unauthorized),
             new TokenAuthenticationMiddleware($this->graph->tokenFactory(), $this->unauthorized, resolvers: $this->graph->bearerResolvers(...)),
             ...$plugins,
@@ -76,6 +84,28 @@ final class Pipeline
             new AuthenticatedRateLimitMiddleware($this->graph->rateLimits(), $this->limiter),
             new AuthorizationMiddleware($this->graph->gate(), $this->unauthorized, $this->json),
         ];
+    }
+
+    /**
+     * The refresh-cookie middleware when the configuration asks for cookie delivery, scoped to the refresh route.
+     *
+     * @return list<MiddlewareInterface>
+     */
+    private function cookieDelivery(): array
+    {
+        $auth = $this->graph->config()->auth;
+        if ($this->bodyDelivery || $auth->tokenDelivery !== 'cookie') {
+            return [];
+        }
+        $path = '/auth/token/refresh';
+        foreach ($this->graph->manifest()->endpoints() as $spec) {
+            if ($spec->session === 'refresh') {
+                $path = $spec->path;
+                break;
+            }
+        }
+
+        return [new RefreshCookieMiddleware(rtrim($this->pathPrefix, '/') . $path, $auth->refreshToken->ttl, $auth->cookieTrustedOrigins, $this->responseFactory, $this->json)];
     }
 
     public function handler(): RequestHandlerInterface

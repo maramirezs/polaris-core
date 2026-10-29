@@ -6,8 +6,12 @@ namespace Polaris\Config;
 
 use Polaris\Exception\InvalidConfigException;
 
+use function implode;
 use function in_array;
 use function is_array;
+use function is_string;
+use function parse_url;
+use function strtolower;
 
 /**
  * The typed, validated root of Polaris configuration.
@@ -40,6 +44,13 @@ final readonly class AuthConfig
         public int $stepUpMaxAge,
         public bool $requireVerifiedEmail,
         public string $tokenDelivery,
+        /**
+         * Origins besides the request's own allowed to sign in and refresh in cookie delivery, normalised to
+         * `https://host[:port]` (docs/cookie-mode/spec.md §2.5, §3).
+         *
+         * @var list<string>
+         */
+        public array $cookieTrustedOrigins = [],
     ) {
         if ($issuer === '') {
             throw new InvalidConfigException('auth.issuer must be a non-empty string.');
@@ -72,6 +83,30 @@ final readonly class AuthConfig
                 'auth.flows.token_delivery must be one of: ' . implode(', ', self::TOKEN_DELIVERY) . '.',
             );
         }
+
+        foreach ($cookieTrustedOrigins as $origin) {
+            if (self::origin($origin) !== $origin) {
+                throw new InvalidConfigException('auth.flows.cookie.trusted_origins entries must be https://host[:port] origins, got "' . $origin . '".');
+            }
+        }
+    }
+
+    /**
+     * An `https` origin as a browser sends it in `Origin` (lower case, no default port), or null when the value is
+     * not one: a path, a query, credentials or another scheme make it something else.
+     */
+    public static function origin(string $value): ?string
+    {
+        $parts = parse_url($value);
+        if (!is_array($parts) || strtolower($parts['scheme'] ?? '') !== 'https' || ($parts['host'] ?? '') === '') {
+            return null;
+        }
+        if (isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment']) || ($parts['path'] ?? '') !== '') {
+            return null;
+        }
+        $port = $parts['port'] ?? null;
+
+        return 'https://' . strtolower($parts['host']) . ($port === null || $port === 443 ? '' : ':' . $port);
     }
 
     /**
@@ -103,6 +138,7 @@ final readonly class AuthConfig
             stepUpMaxAge: (int) ($stepUp['max_age'] ?? 300),
             requireVerifiedEmail: (bool) ($flows['require_verified_email'] ?? true),
             tokenDelivery: (string) ($flows['token_delivery'] ?? 'body'),
+            cookieTrustedOrigins: self::origins(self::section($flows, 'cookie')['trusted_origins'] ?? []),
         );
     }
 
@@ -115,6 +151,28 @@ final readonly class AuthConfig
         $value = $data[$key] ?? null;
 
         return is_array($value) ? $value : [];
+    }
+
+    /**
+     * The configured trusted origins, normalised; an entry that is not an origin is kept as given so the
+     * constructor names it.
+     *
+     * @return list<string>
+     */
+    private static function origins(mixed $values): array
+    {
+        if (!is_array($values)) {
+            throw new InvalidConfigException('auth.flows.cookie.trusted_origins must be a list of origins.');
+        }
+        $origins = [];
+        foreach ($values as $value) {
+            if (!is_string($value)) {
+                throw new InvalidConfigException('auth.flows.cookie.trusted_origins must be a list of origins.');
+            }
+            $origins[] = self::origin($value) ?? $value;
+        }
+
+        return $origins;
     }
 
     private static function nullableString(mixed $value): ?string

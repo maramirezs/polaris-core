@@ -7,6 +7,7 @@ endpoint:
   auth: bearer
   effect: write
   receipt: true
+  session: issue                 # opens a session: in cookie delivery the refresh token goes to the cookie
 
 input:
   source: body

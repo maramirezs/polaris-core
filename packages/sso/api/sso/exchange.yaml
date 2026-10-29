@@ -7,6 +7,7 @@ endpoint:
   auth: public
   effect: write
   receipt: false
+  session: issue                 # opens a session: in cookie delivery the refresh token goes to the cookie
 
 input:
   source: body

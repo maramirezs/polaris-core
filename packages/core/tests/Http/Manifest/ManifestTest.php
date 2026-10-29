@@ -12,25 +12,38 @@ use Polaris\Http\Endpoint;
 use Polaris\Http\Manifest\EndpointSpec;
 use Polaris\Http\Manifest\Loader;
 use Polaris\Http\Manifest\Manifest;
+use Polaris\Http\Manifest\OpenApi;
 use ReflectionClass;
 
 use function array_count_values;
+use function array_filter;
+use function array_key_exists;
 use function array_keys;
 use function array_map;
 use function array_unique;
+use function array_values;
+use function bin2hex;
 use function class_exists;
 use function count;
+use function dirname;
 use function file_get_contents;
+use function file_put_contents;
 use function glob;
 use function in_array;
+use function is_array;
 use function is_subclass_of;
 use function json_decode;
 use function lcfirst;
+use function mkdir;
 use function preg_replace_callback;
 use function property_exists;
+use function random_bytes;
+use function rmdir;
 use function sort;
 use function str_ends_with;
 use function strtoupper;
+use function sys_get_temp_dir;
+use function unlink;
 
 #[CoversClass(Loader::class)]
 #[CoversClass(Manifest::class)]
@@ -100,6 +113,9 @@ final class ManifestTest extends TestCase
             self::assertContains($spec->auth, EndpointSpec::AUTH, $spec->file);
             self::assertContains($spec->effect, EndpointSpec::EFFECTS, $spec->file);
             self::assertContains($spec->inputSource, EndpointSpec::SOURCES, $spec->file);
+            if ($spec->session !== null) {
+                self::assertContains($spec->session, EndpointSpec::SESSIONS, $spec->file);
+            }
             self::assertSame($spec->method, strtoupper($spec->method), $spec->file);
             if ($spec->rateLimit !== null) {
                 $property = lcfirst((string) preg_replace_callback('/_(\w)/', static fn(array $m): string => strtoupper($m[1]), $spec->rateLimit));
@@ -122,7 +138,77 @@ final class ManifestTest extends TestCase
         self::assertSame(EndpointSpec::AUTH, $schema['properties']['endpoint']['properties']['auth']['enum']);
         self::assertSame(EndpointSpec::EFFECTS, $schema['properties']['endpoint']['properties']['effect']['enum']);
         self::assertSame(EndpointSpec::SOURCES, $schema['properties']['input']['properties']['source']['enum']);
+        self::assertSame(EndpointSpec::SESSIONS, $schema['properties']['endpoint']['properties']['session']['enum']);
         self::assertSame(['class'], $schema['properties']['domain']['required']);
+    }
+
+    /**
+     * Cookie token delivery moves a refresh token only off a route that declares `session` (docs/cookie-mode/spec.md
+     * §2.2): every route of core and of every package whose success shows one declares it, but the OAuth provider's
+     * token endpoint, whose refresh tokens belong to OAuth clients and stay in the body.
+     */
+    public function testEveryRouteThatAnswersARefreshTokenDeclaresItsSession(): void
+    {
+        $exceptions = ['POST /oauth2/token'];
+        $packages = array_values(array_filter(glob(dirname(Loader::defaultDirectory(), 2) . '/*/api') ?: [], static fn(string $dir): bool => $dir !== dirname(Loader::defaultDirectory()) . '/api'));
+        self::assertNotEmpty($packages);
+        $answering = [];
+        foreach ((new Loader(Loader::defaultDirectory(), ...$packages))->load()->endpoints() as $spec) {
+            foreach ($spec->outputExamples as $example) {
+                if ((is_array($example['data'] ?? null) && array_key_exists('refresh_token', $example['data'])) || array_key_exists('refresh_token', $example)) {
+                    $answering[] = $spec->route();
+                    if (!in_array($spec->route(), $exceptions, true)) {
+                        self::assertContains($spec->session, ['issue', 'refresh'], "$spec->file answers a refresh token: it needs session: issue or refresh");
+                    }
+                }
+            }
+        }
+        foreach ($exceptions as $route) {
+            self::assertContains($route, $answering, "$route is still an exception worth listing");
+        }
+    }
+
+    public function testTheOpenApiDocumentCarriesTheSessionAndTypesTheRefreshTokenOptional(): void
+    {
+        $paths = OpenApi::document($this->manifest)['paths'];
+
+        $login = $paths['/auth/login']['post'];
+        self::assertSame('issue', $login['x-polaris-session']);
+        $variants = $login['responses']['200']['content']['application/json']['schema']['oneOf'];
+        self::assertArrayHasKey('refresh_token', $variants[0]['properties']['data']['properties']);
+        self::assertNotContains('refresh_token', $variants[0]['properties']['data']['required'], 'absent in cookie delivery');
+        self::assertContains('access_token', $variants[0]['properties']['data']['required']);
+        self::assertStringContainsString('csrf_failed | insecure_transport', $login['responses']['403']['description']);
+
+        $refresh = $paths['/auth/token/refresh']['post'];
+        self::assertSame('refresh', $refresh['x-polaris-session']);
+        self::assertArrayNotHasKey('required', $refresh['requestBody']['content']['application/json']['schema'], 'the cookie can carry it');
+        self::assertNotContains('refresh_token', $refresh['responses']['200']['content']['application/json']['schema']['properties']['data']['required']);
+
+        self::assertSame('end', $paths['/auth/logout']['post']['x-polaris-session']);
+        self::assertArrayNotHasKey('403', $paths['/auth/logout']['post']['responses'], 'an end route refuses nothing');
+        self::assertArrayNotHasKey('x-polaris-session', $paths['/auth/me']['get']);
+        self::assertSame(['email', 'password'], $paths['/auth/login']['post']['requestBody']['content']['application/json']['schema']['required'], 'only the refresh token is optional');
+
+        // Body delivery alone (polaris/mcp's tool schemas): the token is required and nothing is refused, as in 0.11.
+        $body = OpenApi::document($this->manifest, cookieDelivery: false)['paths'];
+        self::assertSame(['refresh_token'], $body['/auth/token/refresh']['post']['requestBody']['content']['application/json']['schema']['required']);
+        self::assertContains('refresh_token', $body['/auth/token/refresh']['post']['responses']['200']['content']['application/json']['schema']['properties']['data']['required']);
+        self::assertArrayNotHasKey('403', $body['/auth/token/refresh']['post']['responses']);
+    }
+
+    public function testTheLoaderRejectsAnUnknownSession(): void
+    {
+        $directory = sys_get_temp_dir() . '/polaris-session-' . bin2hex(random_bytes(4));
+        mkdir($directory);
+        file_put_contents($directory . '/x.yaml', "endpoint: { method: POST, path: /x, auth: public, effect: write, session: open }\ndomain: { class: " . OtpFactorConfirmEndpoint::class . " }\n");
+        try {
+            $this->expectExceptionMessage('x.yaml: unknown session "open".');
+            (new Loader($directory))->load();
+        } finally {
+            unlink($directory . '/x.yaml');
+            rmdir($directory);
+        }
     }
 
     public function testSpecFilesAreTheOnlyYamlUnderApi(): void

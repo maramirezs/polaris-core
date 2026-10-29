@@ -132,9 +132,11 @@ Response body:
 > **Delivery options.** By default tokens are returned in the JSON body for
 > Bearer-header use (no CSRF surface). A host may opt into
 > `flows.token_delivery: cookie`, which sets the refresh token as a
-> `HttpOnly; Secure; SameSite=Strict` cookie and engages the framework
-> `CsrfMiddleware` for cookie-authenticated mutations. The access token stays a
-> short-lived bearer value. See [security.md](security.md#token-transport).
+> `HttpOnly; Secure; SameSite=Strict` cookie scoped to `/auth/token/refresh`,
+> guards every sign-in and refresh with an `X-Polaris-CSRF: 1` header and an
+> `Origin` check, and refuses plaintext; a refresh then posts an empty body. The
+> access token stays a short-lived bearer value. See
+> [security.md](security.md#3-token-security) and `docs/cookie-mode/spec.md`.
 
 ---
 

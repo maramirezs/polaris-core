@@ -32,6 +32,7 @@ endpoint:
   rate_limit: login        # per-IP budget group; omitted when only the global per-user budget applies
   effect: write            # read | write | destructive (see docs/extraction/effects.md)
   receipt: true            # defaults to true for write/destructive, false for read
+  session: issue           # issue | refresh | end: what the route does to the caller's session (cookie token delivery)
 
 input:
   source: body             # body | path | query | none
@@ -53,6 +54,18 @@ errors:                        # every non-2xx the domain returns
 
 events: [user.logged_in]       # PSR-14 events emitted (docs/auth/events.md)
 ```
+
+## The `session` key
+
+`endpoint.session` marks the routes cookie token delivery (`auth.flows.token_delivery: cookie`,
+`docs/cookie-mode/spec.md`) acts on: `issue` for a route that opens a session (every sign-in method),
+`refresh` for `POST /auth/token/refresh`, `end` for a route that ends the caller's (`/auth/logout`,
+`/auth/logout-all`, `/sso/logout`). In cookie delivery the refresh token of an `issue` or `refresh` route
+leaves the body for an `HttpOnly` cookie, those routes refuse plaintext and pass the CSRF guard, and an `end`
+route clears the cookie; in body delivery the key changes nothing. A plugin route that answers a refresh token
+of a Polaris session must carry it (a manifest test fails otherwise); the OAuth provider's `POST /oauth2/token`
+does not, since its tokens belong to OAuth clients. The OpenAPI document carries it as `x-polaris-session` and
+types `data.refresh_token` optional on those routes.
 
 ## Response typing
 

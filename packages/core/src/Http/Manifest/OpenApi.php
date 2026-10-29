@@ -6,12 +6,14 @@ namespace Polaris\Http\Manifest;
 
 use Polaris\Http\Validation\Rule;
 
+use function array_filter;
 use function array_map;
 use function array_values;
 use function count;
 use function explode;
 use function preg_match_all;
 use function in_array;
+use function is_array;
 use function ltrim;
 use function sprintf;
 use function str_starts_with;
@@ -29,15 +31,19 @@ final class OpenApi
 {
     private const string ERROR_SCHEMA = '#/components/schemas/Error';
     private const string PROBLEM_SCHEMA = '#/components/schemas/Problem';
+    private const string REFRESH_TOKEN = 'refresh_token';
 
     /**
+     * @param bool $cookieDelivery type the session routes for cookie delivery too (`data.refresh_token` optional, the
+     *                             guard's refusals listed); false types body delivery alone, for a caller that always
+     *                             gets its tokens in the body (polaris/mcp's tools)
      * @return array<string, mixed>
      */
-    public static function document(Manifest $manifest, string $version = '0.11.0'): array
+    public static function document(Manifest $manifest, string $version = '0.11.0', bool $cookieDelivery = true): array
     {
         $paths = [];
         foreach ($manifest->endpoints() as $spec) {
-            $paths[$spec->path][strtolower($spec->method)] = self::operation($spec);
+            $paths[$spec->path][strtolower($spec->method)] = self::operation($spec, $cookieDelivery);
         }
 
         return [
@@ -80,8 +86,9 @@ final class OpenApi
     /**
      * @return array<string, mixed>
      */
-    private static function operation(EndpointSpec $spec): array
+    private static function operation(EndpointSpec $spec, bool $cookieDelivery): array
     {
+        $cookie = $cookieDelivery && ($spec->session === 'issue' || $spec->session === 'refresh');
         $operation = [
             'operationId' => self::operationId($spec),
             'summary' => $spec->summary,
@@ -91,6 +98,9 @@ final class OpenApi
         ];
         if ($spec->plugin !== null) {
             $operation['x-polaris-plugin'] = $spec->plugin;
+        }
+        if ($spec->session !== null) {
+            $operation['x-polaris-session'] = $spec->session;
         }
         if ($spec->rateLimit !== null) {
             $operation['x-polaris-rate-limit'] = $spec->rateLimit;
@@ -125,7 +135,8 @@ final class OpenApi
             $required = [];
             foreach ($spec->fields as $field) {
                 $properties[$field->name] = self::schema($field);
-                if (self::required($field)) {
+                // In cookie delivery the refresh token comes from the cookie, so a client may leave it out.
+                if (self::required($field) && !($cookie && $spec->session === 'refresh' && $field->name === self::REFRESH_TOKEN)) {
                     $required[] = $field->name;
                 }
             }
@@ -140,7 +151,8 @@ final class OpenApi
         $status = (string) ($spec->outputStatus ?? 200);
         $responses[$status] = ['description' => 'Success'];
         if ($spec->outputExamples !== []) {
-            $content = ['schema' => ExampleSchema::fromExamples($spec->outputExamples)];
+            $schema = ExampleSchema::fromExamples($spec->outputExamples);
+            $content = ['schema' => $cookie ? self::optionalRefreshToken($schema) : $schema];
             if (count($spec->outputExamples) === 1) {
                 $content['example'] = $spec->outputExamples['example'] ?? array_values($spec->outputExamples)[0];
             } else {
@@ -148,7 +160,13 @@ final class OpenApi
             }
             $responses[$status]['content'] = ['application/json' => $content];
         }
-        foreach ($spec->errors as $error) {
+        $errors = $spec->errors;
+        if ($cookie) {
+            // The refusals of cookie delivery (docs/cookie-mode/spec.md §2.5, §2.6).
+            $errors[] = ['status' => 403, 'code' => 'csrf_failed'];
+            $errors[] = ['status' => 403, 'code' => 'insecure_transport'];
+        }
+        foreach ($errors as $error) {
             $code = (string) $error['status'];
             $description = $error['code'] === null ? 'Error' : $error['code'];
             if (isset($responses[$code])) {
@@ -162,6 +180,34 @@ final class OpenApi
         $operation['responses'] = $responses;
 
         return $operation;
+    }
+
+    /**
+     * The success schema with `data.refresh_token` optional, in each `oneOf` variant: absent in cookie delivery.
+     *
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    private static function optionalRefreshToken(array $schema): array
+    {
+        if (isset($schema['oneOf']) && is_array($schema['oneOf'])) {
+            $schema['oneOf'] = array_map(self::optionalRefreshToken(...), $schema['oneOf']);
+
+            return $schema;
+        }
+        $data = $schema['properties']['data'] ?? null;
+        if (!is_array($data) || !is_array($data['required'] ?? null)) {
+            return $schema;
+        }
+        $required = array_values(array_filter($data['required'], static fn(mixed $key): bool => $key !== self::REFRESH_TOKEN));
+        if ($required === []) {
+            unset($data['required']);
+        } else {
+            $data['required'] = $required;
+        }
+        $schema['properties']['data'] = $data;
+
+        return $schema;
     }
 
     private static function required(FieldSpec $field): bool

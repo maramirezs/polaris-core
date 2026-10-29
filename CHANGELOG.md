@@ -4,6 +4,31 @@ All notable changes to Polaris for PHP (the `polaris/*` packages) are documented
 format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Cookie token delivery (`auth.flows.token_delivery: cookie`, documented since 1.0 and now real;
+  `docs/cookie-mode/spec.md`). Every route that opens or rotates a Polaris session answers the refresh
+  token in a `__Secure-polaris_refresh` cookie (`HttpOnly; Secure; SameSite=Strict`, scoped to the refresh
+  route) instead of `data.refresh_token`; a refresh may post an empty body and present the cookie; logout
+  clears it. Sign-in and refresh pass a CSRF guard (`X-Polaris-CSRF: 1` and an `Origin` /
+  `Sec-Fetch-Site` check) and refuse plaintext (`403 csrf_failed`, `403 insecure_transport`). Body
+  delivery, the default, is unchanged.
+- `polaris/core`: the endpoint spec's `session` key (`issue | refresh | end`), on `EndpointSpec::$session`
+  and as `x-polaris-session` in the OpenAPI document; core's and the plugins' session routes carry it.
+  `auth.flows.cookie.trusted_origins` (`AuthConfig::$cookieTrustedOrigins`), validated at boot.
+  `OpenApi::document()` takes `cookieDelivery: false` to type body delivery alone.
+- `polaris/psr15`: `RefreshCookieMiddleware`, registered by `Pipeline::middleware()` in cookie delivery only;
+  `Pipeline`'s `bodyDelivery` argument keeps body delivery for an in-process caller.
+- `@polaris-auth/client`: `createClient({ tokenDelivery: "cookie" })` and `refreshSession(client)` (one
+  refresh at a time across tabs, through the Web Locks API).
+
+### Changed
+- `@polaris-auth/client`: `data.refresh_token` is optional in the types of the session routes, and
+  `refresh_token` in the refresh request body (they are absent in cookie delivery).
+- `polaris/mcp`: the dispatcher's pipeline answers tokens in the body whatever the delivery, and the tool
+  schemas type body delivery.
+
 ## [0.11.0] - 2026-10-13
 
 The `polaris/messaging` `Outbox` change below is breaking for an `Outbox` implementation, so the version

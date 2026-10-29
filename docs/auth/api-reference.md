@@ -167,9 +167,25 @@ a live lockout (indistinguishable on purpose); `403 email_unverified` (with a
 lockout window lock the account for `auth.lockout.duration`. Emits
 `user.logged_in` (no-MFA path), `user.login_failed`, `user.locked`.
 
+### Cookie token delivery
+
+With `auth.flows.token_delivery: cookie` the routes whose spec carries `session` behave as follows (body
+delivery, the default, is unchanged):
+
+- **Sign-in routes** (`session: issue`: `/auth/login`, `/auth/mfa/verify` and every plugin sign-in) and
+  **`/auth/token/refresh`** answer `403 insecure_transport` over plaintext and `403 csrf_failed` unless the
+  request carries `X-Polaris-CSRF: 1` and its `Origin` is the request's own or a
+  `flows.cookie.trusted_origins` entry (without `Origin`, `Sec-Fetch-Site` must be `same-origin`). A plugin
+  route answers both as a problem document.
+- A success leaves `data.refresh_token` out and sets
+  `__Secure-polaris_refresh=<token>; Path=<prefix>/auth/token/refresh; Max-Age=<refresh_token.ttl>; HttpOnly; Secure; SameSite=Strict`.
+- `/auth/token/refresh` takes the cookie when the request carries no `refresh_token` of its own; a `401` on a
+  refresh the cookie authenticated clears it.
+- `/auth/logout`, `/auth/logout-all` and `/sso/logout` clear the cookie on success.
+
 ### POST /auth/token/refresh
 
-Body: `refresh_token` (required). `200` with a fresh `access_token` and (with
+Body: `refresh_token` (required; in cookie delivery the cookie supplies it). `200` with a fresh `access_token` and (with
 rotation on, the default) a **new** `refresh_token`; the presented one is
 consumed. Replaying a rotated token revokes the whole family and returns
 `401 invalid_grant` (reuse detection); expired or unknown tokens are also

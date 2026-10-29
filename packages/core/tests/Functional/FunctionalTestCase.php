@@ -24,6 +24,7 @@ use Polaris\Tests\Support\RecordingOtpMailer;
 use Polaris\Tests\Support\RecordingSmsSender;
 use Polaris\Tests\Support\TestKeys;
 
+use function array_replace_recursive;
 use function getenv;
 use function in_array;
 use function is_array;
@@ -82,6 +83,16 @@ abstract class FunctionalTestCase extends DatabaseTestCase
     }
 
     /**
+     * The `auth` settings a test class sets over the environment's (cookie token delivery, for instance).
+     *
+     * @return array<string, mixed>
+     */
+    protected static function authConfig(): array
+    {
+        return [];
+    }
+
+    /**
      * Where this suite's contract fixtures live; a package's functional tests point at their own.
      */
     protected static function fixtureDirectory(): string
@@ -96,7 +107,7 @@ abstract class FunctionalTestCase extends DatabaseTestCase
     {
         $this->harness = self::harnessClass()::create(new Config(
             secrets: Secrets::fromEnvironment(self::environment()),
-            auth: AuthConfig::fromArray(self::authConfigArray()),
+            auth: AuthConfig::fromArray(array_replace_recursive(self::authConfigArray(), static::authConfig())),
             database: $this->adapter,
             mailer: $this->mailer,
             sms: $this->sms,
